@@ -117,3 +117,20 @@ export async function exportProgressData() {
   }
   return local.exportProgressDataLocal();
 }
+
+export async function fetchActivityHistory() {
+  if (await checkBackend()) {
+    try {
+      const res = await fetch(`${API_BASE}/activity`);
+      if (res.ok) return await res.json();
+    } catch (e) {
+      backendAvailable = false;
+    }
+  }
+  return local.fetchActivityHistoryLocal();
+}
+
+export async function importProgressData(data) {
+  return local.importProgressDataLocal(data);
+}
+

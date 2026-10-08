@@ -5,6 +5,7 @@ import Filters from './components/Filters';
 import ProblemCard from './components/ProblemCard';
 import ProblemDetailModal from './components/ProblemDetailModal';
 import ProgressiveView from './components/ProgressiveView';
+import ActivityHeatmap from './components/ActivityHeatmap';
 import { 
   fetchOverview, 
   fetchProblems, 
@@ -12,7 +13,9 @@ import {
   toggleCheckpoint, 
   batchToggleCheckpoints, 
   updateProblemNotes,
-  exportProgressData 
+  exportProgressData,
+  fetchActivityHistory,
+  importProgressData
 } from './services/api';
 import { Loader2, AlertCircle, Sparkles } from 'lucide-react';
 
@@ -104,6 +107,18 @@ export default function App() {
     }
   }, [selectedDay, selectedCategory, difficulty, status, search]);
 
+  // Activity Heatmap State
+  const [activityHistory, setActivityHistory] = useState({});
+
+  const loadActivity = useCallback(async () => {
+    try {
+      const data = await fetchActivityHistory();
+      setActivityHistory(data || {});
+    } catch (e) {
+      console.error('Failed to load activity:', e);
+    }
+  }, []);
+
   useEffect(() => {
     loadOverview();
   }, [loadOverview]);
@@ -111,6 +126,10 @@ export default function App() {
   useEffect(() => {
     loadProblems();
   }, [loadProblems]);
+
+  useEffect(() => {
+    loadActivity();
+  }, [loadActivity]);
 
   // 打开题目详情抽屉
   const handleOpenDetail = async (problem) => {
@@ -163,6 +182,7 @@ export default function App() {
       if (res.overview) {
         setOverview(res.overview);
       }
+      loadActivity();
     } catch (err) {
       alert(`操作检查点失败: ${err.message}`);
     }
@@ -205,6 +225,7 @@ export default function App() {
       if (res.overview) {
         setOverview(res.overview);
       }
+      loadActivity();
     } catch (err) {
       alert(`批量操作失败: ${err.message}`);
     }
@@ -239,6 +260,19 @@ export default function App() {
     }
   };
 
+  // 导入备份数据
+  const handleImport = async (data) => {
+    try {
+      const res = await importProgressData(data);
+      if (res) setOverview(res);
+      await loadProblems();
+      await loadActivity();
+      alert('🎉 历史做题进度、手记与修行热力图已成功恢复！');
+    } catch (err) {
+      alert(`导入失败: ${err.message}`);
+    }
+  };
+
   // 重置筛选
   const handleResetFilters = () => {
     setSearch('');
@@ -267,6 +301,7 @@ export default function App() {
       <Header 
         overview={overview} 
         onExport={handleExport}
+        onImport={handleImport}
         theme={theme}
         onToggleTheme={handleToggleTheme}
         viewMode={viewMode}
@@ -275,6 +310,9 @@ export default function App() {
 
       {/* 主体容器 */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* 每日修行热力图 (Activity Heatmap) */}
+        <ActivityHeatmap activityHistory={activityHistory} />
+
         {viewMode === 'progressive' ? (
           /* 🚀 渐进闯关专注模式 */
           <ProgressiveView

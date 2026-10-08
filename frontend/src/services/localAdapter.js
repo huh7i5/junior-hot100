@@ -2,6 +2,43 @@ import staticData from '../data/hot100Data.json';
 
 const STORAGE_KEY_CHECKPOINTS = 'hot100_user_checkpoints';
 const STORAGE_KEY_NOTES = 'hot100_user_notes';
+const STORAGE_KEY_ACTIVITY = 'hot100_user_activity';
+
+function getTodayStr() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getUserActivity() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY_ACTIVITY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveUserActivity(map) {
+  try {
+    localStorage.setItem(STORAGE_KEY_ACTIVITY, JSON.stringify(map));
+  } catch (e) {}
+}
+
+function recordActivityDelta(delta) {
+  if (!delta) return;
+  const today = getTodayStr();
+  const activity = getUserActivity();
+  const current = activity[today] || 0;
+  const updated = Math.max(0, current + delta);
+  if (updated > 0) {
+    activity[today] = updated;
+  } else {
+    delete activity[today];
+  }
+  saveUserActivity(activity);
+}
 
 function getUserCheckpoints() {
   try {
@@ -234,8 +271,10 @@ export function toggleCheckpointLocal(checkpointId) {
   const newState = !userCheckpoints[cpId];
   if (newState) {
     userCheckpoints[cpId] = true;
+    recordActivityDelta(1);
   } else {
     delete userCheckpoints[cpId];
+    recordActivityDelta(-1);
   }
   saveUserCheckpoints(userCheckpoints);
 
@@ -261,14 +300,22 @@ export function batchToggleCheckpointsLocal(problemId, completed) {
   const cps = checkpointsByProblem.get(pId) || [];
   const userCheckpoints = getUserCheckpoints();
 
+  let delta = 0;
   cps.forEach(cp => {
-    if (completed) {
+    const was = !!userCheckpoints[cp.id];
+    if (completed && !was) {
       userCheckpoints[cp.id] = true;
-    } else {
+      delta++;
+    } else if (!completed && was) {
       delete userCheckpoints[cp.id];
+      delta--;
     }
   });
+
   saveUserCheckpoints(userCheckpoints);
+  if (delta !== 0) {
+    recordActivityDelta(delta);
+  }
 
   const state = getProblemState(pId, userCheckpoints);
   const overview = fetchOverviewLocal();
@@ -294,11 +341,30 @@ export function updateProblemNotesLocal(problemId, notes) {
 }
 
 /**
+ * 获取用户做题活跃热力图历史
+ */
+export function fetchActivityHistoryLocal() {
+  const activity = getUserActivity();
+  const userCheckpoints = getUserCheckpoints();
+  const totalCompleted = Object.keys(userCheckpoints).length;
+
+  // 如果从未记录过活动，但已有做完的检查点，则默认归属到今天
+  if (Object.keys(activity).length === 0 && totalCompleted > 0) {
+    const today = getTodayStr();
+    activity[today] = totalCompleted;
+    saveUserActivity(activity);
+  }
+
+  return activity;
+}
+
+/**
  * 导出全部做题进度与手记为备份数据
  */
 export function exportProgressDataLocal() {
   const userCheckpoints = getUserCheckpoints();
   const userNotes = getUserNotes();
+  const userActivity = getUserActivity();
   const overview = fetchOverviewLocal();
 
   return {
@@ -307,6 +373,26 @@ export function exportProgressDataLocal() {
     storage_type: 'local_storage',
     overview,
     user_checkpoints: userCheckpoints,
-    user_notes: userNotes
+    user_notes: userNotes,
+    user_activity: userActivity
   };
+}
+
+/**
+ * 导入历史备份数据
+ */
+export function importProgressDataLocal(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('无效的备份文件内容');
+  }
+  if (data.user_checkpoints) {
+    saveUserCheckpoints(data.user_checkpoints);
+  }
+  if (data.user_notes) {
+    saveUserNotes(data.user_notes);
+  }
+  if (data.user_activity) {
+    saveUserActivity(data.user_activity);
+  }
+  return fetchOverviewLocal();
 }

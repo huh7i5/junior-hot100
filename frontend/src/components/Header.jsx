@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { 
   Trophy, 
   CheckCircle2, 
   Clock, 
   CircleDashed, 
   Download, 
+  Upload,
   Sparkles,
   Target,
   Sun,
@@ -16,11 +17,13 @@ import {
 export default function Header({ 
   overview, 
   onExport,
+  onImport,
   theme = 'dark',
   onToggleTheme,
   viewMode = 'grid',
   onViewModeChange
 }) {
+  const fileInputRef = useRef(null);
   const summary = overview?.summary || {
     total_problems: 100,
     mastered_problems: 0,
@@ -150,6 +153,38 @@ export default function Header({
               ) : (
                 <Moon className="w-4 h-4 text-indigo-600" />
               )}
+            </button>
+
+            {/* 导入备份按钮与隐藏输入框 */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && onImport) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const data = JSON.parse(event.target.result);
+                      onImport(data);
+                    } catch (err) {
+                      alert('解析备份文件失败，请确认文件格式正确');
+                    }
+                  };
+                  reader.readAsText(file);
+                }
+                e.target.value = '';
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="导入此前的备份 JSON 文件 (跨设备/重装无缝恢复)"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 transition shadow-sm active:scale-95"
+            >
+              <Upload className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+              <span className="hidden sm:inline">导入恢复</span>
             </button>
 
             {/* 导出备份按钮 */}
